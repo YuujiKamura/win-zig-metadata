@@ -1,16 +1,15 @@
 # win-zig-metadata
 
-`win-zig-metadata` will be the low-level WinMD reader layer.
+`win-zig-metadata` is the low-level WinMD reader layer.
 
-## Initial plan
+## Current scope
 
-- Move WinMD table/stream readers from `win-zig-bindgen` into this repo
-- Expose reusable APIs for:
-  - PE metadata loading
-  - table decoding
-  - coded index resolution
-  - type/namespace enumeration
+- `pe.zig`: PE/CLI header parsing
+- `metadata.zig`: .NET metadata stream discovery
+- `streams.zig`: #Strings/#Blob/#GUID heap access
+- `tables.zig`: metadata table row/index decoding
+- `coded_index.zig`: coded index helpers
 
-## Status
+## Build
 
-Scaffold created. Implementation extraction pending.
+- `zig build test`
