@@ -260,6 +260,16 @@ pub const Info = struct {
         };
     }
 
+    pub fn readFieldRVA(self: Info, row: u32) TableError!FieldRVARow {
+        const t = self.getTable(.FieldRVA);
+        if (row == 0 or row > t.row_count) return error.InvalidTableRow;
+        var c = rowCursor(self, .FieldRVA, row) catch return error.InvalidTableRow;
+        return .{
+            .rva = c.readU32(),
+            .field = c.readIdx(simpleSize(self, .Field)),
+        };
+    }
+
     pub fn readModuleRef(self: Info, row: u32) TableError!ModuleRefRow {
         const t = self.getTable(.ModuleRef);
         if (row == 0 or row > t.row_count) return error.InvalidTableRow;
@@ -551,6 +561,11 @@ pub const ImplMapRow = struct {
     import_scope: u32,
 };
 
+pub const FieldRVARow = struct {
+    rva: u32,
+    field: u32,
+};
+
 pub const ModuleRefRow = struct {
     name: u32,
 };
@@ -582,4 +597,29 @@ test "simpleSize uses row_counts not tables for large row counts" {
     // Boundary: 65535 → 2
     info.row_counts[@intFromEnum(coded.TableId.Param)] = 65535;
     try std.testing.expectEqual(@as(u8, 2), simpleSize(info, .Param));
+}
+
+test "readFieldRVA decodes a single row" {
+    var row_data = [_]u8{ 0x78, 0x56, 0x34, 0x12, 0x09, 0x00 };
+    var tables_arr = [_]TableInfo{.{}} ** 64;
+    tables_arr[@intFromEnum(TableId.FieldRVA)] = .{
+        .row_count = 1,
+        .row_size = 6,
+        .offset = 0,
+        .present = true,
+    };
+
+    var info = Info{
+        .data = &row_data,
+        .heap_sizes = 0,
+        .valid_mask = 0,
+        .row_counts = std.mem.zeroes([64]u32),
+        .tables = tables_arr,
+        .indexes = undefined,
+    };
+    info.row_counts[@intFromEnum(TableId.Field)] = 10;
+
+    const row = try info.readFieldRVA(1);
+    try std.testing.expectEqual(@as(u32, 0x12345678), row.rva);
+    try std.testing.expectEqual(@as(u32, 9), row.field);
 }
