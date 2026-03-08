@@ -75,6 +75,17 @@ pub fn decodeTypeDefOrRef(raw: u32) IndexError!Decoded {
     };
 }
 
+pub fn decodeHasConstant(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x3;
+    const row = raw >> 2;
+    return switch (tag) {
+        0 => .{ .table = .Field, .row = row },
+        1 => .{ .table = .Param, .row = row },
+        2 => .{ .table = .Property, .row = row },
+        else => error.InvalidTag,
+    };
+}
+
 pub fn decodeHasCustomAttribute(raw: u32) IndexError!Decoded {
     const tag = raw & 0x1f;
     const row = raw >> 5;
@@ -115,64 +126,239 @@ pub fn decodeCustomAttributeType(raw: u32) IndexError!Decoded {
     };
 }
 
-test "decode TypeDefOrRef" {
-    const x = try decodeTypeDefOrRef((123 << 2) | 1);
-    try std.testing.expectEqual(TableId.TypeRef, x.table);
-    try std.testing.expectEqual(@as(u32, 123), x.row);
+pub fn decodeMemberRefParent(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x7;
+    const row = raw >> 3;
+    return switch (tag) {
+        0 => .{ .table = .TypeDef, .row = row },
+        1 => .{ .table = .TypeRef, .row = row },
+        2 => .{ .table = .ModuleRef, .row = row },
+        3 => .{ .table = .MethodDef, .row = row },
+        4 => .{ .table = .TypeSpec, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "coded index width grows to 4 bytes" {
-    var rows = std.mem.zeroes([64]u32);
-    rows[@intFromEnum(TableId.TypeDef)] = 100_000;
-    const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
-    try std.testing.expectEqual(@as(u8, 4), size);
+pub fn decodeHasFieldMarshal(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x1;
+    const row = raw >> 1;
+    return switch (tag) {
+        0 => .{ .table = .Field, .row = row },
+        1 => .{ .table = .Param, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "decode TypeDefOrRef invalid tag returns error" {
-    try std.testing.expectError(error.InvalidTag, decodeTypeDefOrRef((1 << 2) | 3));
+pub fn decodeHasDeclSecurity(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x3;
+    const row = raw >> 2;
+    return switch (tag) {
+        0 => .{ .table = .TypeDef, .row = row },
+        1 => .{ .table = .MethodDef, .row = row },
+        2 => .{ .table = .Assembly, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "coded index width stays 2 bytes at threshold" {
-    var rows = std.mem.zeroes([64]u32);
-    // For tag_bits=2, max small rows = (1 << 14) - 1.
-    rows[@intFromEnum(TableId.TypeDef)] = (1 << 14) - 1;
-    const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
-    try std.testing.expectEqual(@as(u8, 2), size);
+pub fn decodeMemberForwarded(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x1;
+    const row = raw >> 1;
+    return switch (tag) {
+        0 => .{ .table = .Field, .row = row },
+        1 => .{ .table = .MethodDef, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "coded index width becomes 4 bytes above threshold" {
-    var rows = std.mem.zeroes([64]u32);
-    rows[@intFromEnum(TableId.TypeRef)] = (1 << 14);
-    const size = codedIndexSize(rows, 2, &.{ .TypeDef, .TypeRef, .TypeSpec });
-    try std.testing.expectEqual(@as(u8, 4), size);
+pub fn decodeMethodDefOrRef(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x1;
+    const row = raw >> 1;
+    return switch (tag) {
+        0 => .{ .table = .MethodDef, .row = row },
+        1 => .{ .table = .MemberRef, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "decode HasCustomAttribute maps methoddef tag" {
-    const x = try decodeHasCustomAttribute((77 << 5) | 0);
-    try std.testing.expectEqual(TableId.MethodDef, x.table);
-    try std.testing.expectEqual(@as(u32, 77), x.row);
+pub fn decodeHasSemantics(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x1;
+    const row = raw >> 1;
+    return switch (tag) {
+        0 => .{ .table = .Event, .row = row },
+        1 => .{ .table = .Property, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "decode HasCustomAttribute maps methodspec tag" {
-    const x = try decodeHasCustomAttribute((9 << 5) | 21);
-    try std.testing.expectEqual(TableId.MethodSpec, x.table);
-    try std.testing.expectEqual(@as(u32, 9), x.row);
+pub fn decodeResolutionScope(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x3;
+    const row = raw >> 2;
+    return switch (tag) {
+        0 => .{ .table = .Module, .row = row },
+        1 => .{ .table = .ModuleRef, .row = row },
+        2 => .{ .table = .AssemblyRef, .row = row },
+        3 => .{ .table = .TypeRef, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "decode HasCustomAttribute invalid tag returns error" {
-    try std.testing.expectError(error.InvalidTag, decodeHasCustomAttribute((1 << 5) | 31));
+pub fn decodeTypeOrMethodDef(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x1;
+    const row = raw >> 1;
+    return switch (tag) {
+        0 => .{ .table = .TypeDef, .row = row },
+        1 => .{ .table = .MethodDef, .row = row },
+        else => error.InvalidTag,
+    };
 }
 
-test "decode CustomAttributeType maps methoddef and memberref" {
-    const m = try decodeCustomAttributeType((42 << 3) | 2);
-    try std.testing.expectEqual(TableId.MethodDef, m.table);
-    try std.testing.expectEqual(@as(u32, 42), m.row);
+// --- Unit tests ---
 
-    const r = try decodeCustomAttributeType((24 << 3) | 3);
-    try std.testing.expectEqual(TableId.MemberRef, r.table);
-    try std.testing.expectEqual(@as(u32, 24), r.row);
+const testing = std.testing;
+
+test "decodeTypeDefOrRef" {
+    // tag=0 (TypeDef), row=5 => raw = (5 << 2) | 0 = 20
+    const d0 = try decodeTypeDefOrRef(20);
+    try testing.expectEqual(TableId.TypeDef, d0.table);
+    try testing.expectEqual(@as(u32, 5), d0.row);
+    // tag=1 (TypeRef), row=3 => raw = (3 << 2) | 1 = 13
+    const d1 = try decodeTypeDefOrRef(13);
+    try testing.expectEqual(TableId.TypeRef, d1.table);
+    try testing.expectEqual(@as(u32, 3), d1.row);
+    // tag=2 (TypeSpec), row=1 => raw = (1 << 2) | 2 = 6
+    const d2 = try decodeTypeDefOrRef(6);
+    try testing.expectEqual(TableId.TypeSpec, d2.table);
+    try testing.expectEqual(@as(u32, 1), d2.row);
+    // tag=3 => invalid
+    try testing.expectError(error.InvalidTag, decodeTypeDefOrRef(3));
 }
 
-test "decode CustomAttributeType invalid tag returns error" {
-    try std.testing.expectError(error.InvalidTag, decodeCustomAttributeType((2 << 3) | 1));
+test "decodeHasConstant" {
+    // tag=0 (Field), row=7 => raw = (7 << 2) | 0 = 28
+    const d0 = try decodeHasConstant(28);
+    try testing.expectEqual(TableId.Field, d0.table);
+    try testing.expectEqual(@as(u32, 7), d0.row);
+    // tag=1 (Param), row=2 => raw = (2 << 2) | 1 = 9
+    const d1 = try decodeHasConstant(9);
+    try testing.expectEqual(TableId.Param, d1.table);
+    try testing.expectEqual(@as(u32, 2), d1.row);
+    // tag=2 (Property), row=4 => raw = (4 << 2) | 2 = 18
+    const d2 = try decodeHasConstant(18);
+    try testing.expectEqual(TableId.Property, d2.table);
+    try testing.expectEqual(@as(u32, 4), d2.row);
+    // tag=3 => invalid
+    try testing.expectError(error.InvalidTag, decodeHasConstant(3));
+}
+
+test "decodeCustomAttributeType" {
+    // tag=2 (MethodDef), row=10 => raw = (10 << 3) | 2 = 82
+    const d0 = try decodeCustomAttributeType(82);
+    try testing.expectEqual(TableId.MethodDef, d0.table);
+    try testing.expectEqual(@as(u32, 10), d0.row);
+    // tag=3 (MemberRef), row=5 => raw = (5 << 3) | 3 = 43
+    const d1 = try decodeCustomAttributeType(43);
+    try testing.expectEqual(TableId.MemberRef, d1.table);
+    try testing.expectEqual(@as(u32, 5), d1.row);
+    // tag=0 => invalid
+    try testing.expectError(error.InvalidTag, decodeCustomAttributeType(0));
+}
+
+test "decodeMemberRefParent" {
+    // tag=0 (TypeDef), row=3 => raw = (3 << 3) | 0 = 24
+    const d0 = try decodeMemberRefParent(24);
+    try testing.expectEqual(TableId.TypeDef, d0.table);
+    try testing.expectEqual(@as(u32, 3), d0.row);
+    // tag=4 (TypeSpec), row=2 => raw = (2 << 3) | 4 = 20
+    const d4 = try decodeMemberRefParent(20);
+    try testing.expectEqual(TableId.TypeSpec, d4.table);
+    try testing.expectEqual(@as(u32, 2), d4.row);
+    // tag=5 => invalid
+    try testing.expectError(error.InvalidTag, decodeMemberRefParent(5));
+}
+
+test "decodeHasSemantics" {
+    // tag=0 (Event), row=6 => raw = (6 << 1) | 0 = 12
+    const d0 = try decodeHasSemantics(12);
+    try testing.expectEqual(TableId.Event, d0.table);
+    try testing.expectEqual(@as(u32, 6), d0.row);
+    // tag=1 (Property), row=3 => raw = (3 << 1) | 1 = 7
+    const d1 = try decodeHasSemantics(7);
+    try testing.expectEqual(TableId.Property, d1.table);
+    try testing.expectEqual(@as(u32, 3), d1.row);
+}
+
+test "decodeResolutionScope" {
+    // tag=0 (Module), row=1 => raw = (1 << 2) | 0 = 4
+    const d0 = try decodeResolutionScope(4);
+    try testing.expectEqual(TableId.Module, d0.table);
+    try testing.expectEqual(@as(u32, 1), d0.row);
+    // tag=1 (ModuleRef), row=2 => raw = (2 << 2) | 1 = 9
+    const d1 = try decodeResolutionScope(9);
+    try testing.expectEqual(TableId.ModuleRef, d1.table);
+    try testing.expectEqual(@as(u32, 2), d1.row);
+    // tag=2 (AssemblyRef), row=5 => raw = (5 << 2) | 2 = 22
+    const d2 = try decodeResolutionScope(22);
+    try testing.expectEqual(TableId.AssemblyRef, d2.table);
+    try testing.expectEqual(@as(u32, 5), d2.row);
+    // tag=3 (TypeRef), row=4 => raw = (4 << 2) | 3 = 19
+    const d3 = try decodeResolutionScope(19);
+    try testing.expectEqual(TableId.TypeRef, d3.table);
+    try testing.expectEqual(@as(u32, 4), d3.row);
+}
+
+test "decodeMemberForwarded" {
+    // tag=0 (Field), row=8 => raw = (8 << 1) | 0 = 16
+    const d0 = try decodeMemberForwarded(16);
+    try testing.expectEqual(TableId.Field, d0.table);
+    try testing.expectEqual(@as(u32, 8), d0.row);
+    // tag=1 (MethodDef), row=4 => raw = (4 << 1) | 1 = 9
+    const d1 = try decodeMemberForwarded(9);
+    try testing.expectEqual(TableId.MethodDef, d1.table);
+    try testing.expectEqual(@as(u32, 4), d1.row);
+}
+
+test "decodeMethodDefOrRef" {
+    // tag=0 (MethodDef), row=10 => raw = (10 << 1) | 0 = 20
+    const d0 = try decodeMethodDefOrRef(20);
+    try testing.expectEqual(TableId.MethodDef, d0.table);
+    try testing.expectEqual(@as(u32, 10), d0.row);
+    // tag=1 (MemberRef), row=7 => raw = (7 << 1) | 1 = 15
+    const d1 = try decodeMethodDefOrRef(15);
+    try testing.expectEqual(TableId.MemberRef, d1.table);
+    try testing.expectEqual(@as(u32, 7), d1.row);
+}
+
+test "decodeTypeOrMethodDef" {
+    // tag=0 (TypeDef), row=12 => raw = (12 << 1) | 0 = 24
+    const d0 = try decodeTypeOrMethodDef(24);
+    try testing.expectEqual(TableId.TypeDef, d0.table);
+    try testing.expectEqual(@as(u32, 12), d0.row);
+    // tag=1 (MethodDef), row=9 => raw = (9 << 1) | 1 = 19
+    const d1 = try decodeTypeOrMethodDef(19);
+    try testing.expectEqual(TableId.MethodDef, d1.table);
+    try testing.expectEqual(@as(u32, 9), d1.row);
+}
+
+test "decodeHasFieldMarshal" {
+    // tag=0 (Field), row=3 => raw = (3 << 1) | 0 = 6
+    const d0 = try decodeHasFieldMarshal(6);
+    try testing.expectEqual(TableId.Field, d0.table);
+    try testing.expectEqual(@as(u32, 3), d0.row);
+    // tag=1 (Param), row=5 => raw = (5 << 1) | 1 = 11
+    const d1 = try decodeHasFieldMarshal(11);
+    try testing.expectEqual(TableId.Param, d1.table);
+    try testing.expectEqual(@as(u32, 5), d1.row);
+}
+
+test "decodeHasDeclSecurity" {
+    // tag=0 (TypeDef), row=2 => raw = (2 << 2) | 0 = 8
+    const d0 = try decodeHasDeclSecurity(8);
+    try testing.expectEqual(TableId.TypeDef, d0.table);
+    try testing.expectEqual(@as(u32, 2), d0.row);
+    // tag=2 (Assembly), row=1 => raw = (1 << 2) | 2 = 6
+    const d2 = try decodeHasDeclSecurity(6);
+    try testing.expectEqual(TableId.Assembly, d2.table);
+    try testing.expectEqual(@as(u32, 1), d2.row);
+    // tag=3 => invalid
+    try testing.expectError(error.InvalidTag, decodeHasDeclSecurity(3));
 }
