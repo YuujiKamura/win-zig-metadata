@@ -160,6 +160,17 @@ pub fn decodeHasDeclSecurity(raw: u32) IndexError!Decoded {
     };
 }
 
+pub fn decodeImplementation(raw: u32) IndexError!Decoded {
+    const tag = raw & 0x3;
+    const row = raw >> 2;
+    return switch (tag) {
+        0 => .{ .table = .File, .row = row },
+        1 => .{ .table = .AssemblyRef, .row = row },
+        2 => .{ .table = .ExportedType, .row = row },
+        else => error.InvalidTag,
+    };
+}
+
 pub fn decodeMemberForwarded(raw: u32) IndexError!Decoded {
     const tag = raw & 0x1;
     const row = raw >> 1;
@@ -361,4 +372,21 @@ test "decodeHasDeclSecurity" {
     try testing.expectEqual(@as(u32, 1), d2.row);
     // tag=3 => invalid
     try testing.expectError(error.InvalidTag, decodeHasDeclSecurity(3));
+}
+
+test "decodeImplementation" {
+    // tag=0 (File), row=2 => raw = (2 << 2) | 0 = 8
+    const d0 = try decodeImplementation(8);
+    try testing.expectEqual(TableId.File, d0.table);
+    try testing.expectEqual(@as(u32, 2), d0.row);
+    // tag=1 (AssemblyRef), row=5 => raw = (5 << 2) | 1 = 21
+    const d1 = try decodeImplementation(21);
+    try testing.expectEqual(TableId.AssemblyRef, d1.table);
+    try testing.expectEqual(@as(u32, 5), d1.row);
+    // tag=2 (ExportedType), row=7 => raw = (7 << 2) | 2 = 30
+    const d2 = try decodeImplementation(30);
+    try testing.expectEqual(TableId.ExportedType, d2.table);
+    try testing.expectEqual(@as(u32, 7), d2.row);
+    // tag=3 => invalid
+    try testing.expectError(error.InvalidTag, decodeImplementation(3));
 }
