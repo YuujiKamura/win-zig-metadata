@@ -141,6 +141,15 @@ pub const Info = struct {
         };
     }
 
+    pub fn readTypeSpec(self: Info, row: u32) TableError!TypeSpecRow {
+        const t = self.getTable(.TypeSpec);
+        if (row == 0 or row > t.row_count) return error.InvalidTableRow;
+        var c = rowCursor(self, .TypeSpec, row) catch return error.InvalidTableRow;
+        return .{
+            .signature = c.readIdx(self.indexes.blob),
+        };
+    }
+
     pub fn readConstant(self: Info, row: u32) TableError!ConstantRow {
         const t = self.getTable(.Constant);
         if (row == 0 or row > t.row_count) return error.InvalidTableRow;
@@ -495,6 +504,10 @@ pub const MemberRefRow = struct {
 pub const InterfaceImplRow = struct {
     class: u32,
     interface: u32,
+};
+
+pub const TypeSpecRow = struct {
+    signature: u32,
 };
 
 pub const ConstantRow = struct {
